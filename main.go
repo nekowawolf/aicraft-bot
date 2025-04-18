@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	
 
 	"github.com/joho/godotenv"
 	"github.com/nekowawolf/aicraft-bot/api"
@@ -39,7 +38,7 @@ func main() {
 	order, err := api.CreateVoteOrder(
 		token,
 		cfg.CandidateID,
-		cfg.GetChainIDString(), 
+		cfg.GetChainIDString(),
 		cfg.TargetCountryID,
 		cfg.RPCURL,
 		cfg.WalletID,
@@ -56,7 +55,11 @@ func main() {
 		order.Data.Payment.ContractAddress,
 		cfg.CandidateID,
 		cfg.FeedAmount,
-		cfg.ChainID, 
+		cfg.ChainID,
+		order.Data.Order.ID,
+		order.Data.Payment.Params.RequestData,
+		order.Data.Payment.Params.UserHashedMessage,
+		order.Data.Payment.Params.IntegritySignature,
 	)
 	if err != nil {
 		log.Fatalf("❌ Failed to create vote transaction: %v", err)
@@ -84,7 +87,6 @@ func main() {
 	fmt.Printf("🗳️ Candidate: %s\n", cfg.CandidateID)
 	fmt.Printf("🌎 Country: %s\n", cfg.TargetCountryID)
 }
-
 
 func printConfig(cfg *config.Config) {
 	fmt.Println("\n⚙️ Configuration:")
