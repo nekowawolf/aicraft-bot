@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -12,7 +13,7 @@ type Config struct {
 	PrivateKey      string `envconfig:"PRIVATE_KEY" required:"true"`
 	RPCURL          string `envconfig:"RPC_URL" default:"https://testnet-rpc.monad.xyz"`
 	WalletID        string `envconfig:"WALLET_ID" required:"true"`
-	ChainID         string `envconfig:"CHAIN_ID" default:"10143"`
+	ChainID         int64  `envconfig:"CHAIN_ID" default:"10143"` // Diubah menjadi int64
 	TargetCountry   string `envconfig:"TARGET_COUNTRY"`
 	TargetCountryID string `envconfig:"TARGET_COUNTRY_ID" required:"true"`
 	CandidateID     string `envconfig:"CANDIDATE_ID" required:"true"`
@@ -35,7 +36,6 @@ func LoadConfig() (*Config, error) {
 	cfg.WalletID = strings.TrimSpace(cfg.WalletID)
 	cfg.TargetCountryID = strings.TrimSpace(cfg.TargetCountryID)
 	cfg.CandidateID = strings.TrimSpace(cfg.CandidateID)
-	cfg.ChainID = strings.TrimSpace(cfg.ChainID)
 
 	if cfg.PrivateKey == "" {
 		return nil, fmt.Errorf("PRIVATE_KEY is required")
@@ -54,9 +54,13 @@ func LoadConfig() (*Config, error) {
 		cfg.RPCURL = "https://testnet-rpc.monad.xyz"
 	}
 
-	if cfg.ChainID == "" {
-		cfg.ChainID = "10143"
+	if cfg.ChainID == 0 {
+		cfg.ChainID = 10143 
 	}
 
 	return &cfg, nil
+}
+
+func (c *Config) GetChainIDString() string {
+	return strconv.FormatInt(c.ChainID, 10)
 }
