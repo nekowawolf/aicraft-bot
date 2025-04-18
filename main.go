@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/joho/godotenv"
 	"github.com/nekowawolf/aicraft-bot/api"
@@ -12,47 +13,51 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+		log.Println("Warning: No .env file found, using system environment variables")
 	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("❌ Failed to load config: %v", err)
 	}
+
+	fmt.Printf("Config Values:\n")
+	fmt.Printf("Private Key: %t\n", cfg.PrivateKey != "")
+	fmt.Printf("Target Country ID: %s\n", cfg.TargetCountryID)
+	fmt.Printf("Candidate ID: %s\n", cfg.CandidateID)
 
 	wallet, err := wallet.NewWallet(cfg.PrivateKey)
 	if err != nil {
-		log.Fatalf("Failed to initialize wallet: %v", err)
+		log.Fatalf("❌ Failed to initialize wallet: %v", err)
 	}
-	address := wallet.GetAddress()
-	fmt.Printf("Using wallet: %s\n", address)
+	fmt.Printf("🔑 Using wallet: %s\n", wallet.GetAddress())
 
-	message, err := api.GetSignMessage(address)
+	token, err := api.WalletSignIn(wallet)
 	if err != nil {
-		log.Fatalf("Failed to get sign message: %v", err)
+		log.Fatalf("❌ Failed to authenticate: %v", err)
 	}
-	fmt.Printf("Sign message: %s\n", message)
+	fmt.Printf("🔑 Authentication token: %s\n", token)
 
-	signature, err := wallet.SignMessage(message)
+	fmt.Printf("🔑 Using candidate: %s\n", cfg.CandidateID)
+
+	order, err := api.CreateVoteOrder(token, cfg.CandidateID, cfg.ChainID, cfg.TargetCountryID, cfg.RPCURL, cfg.WalletID, cfg.FeedAmount)
 	if err != nil {
-		log.Fatalf("Failed to sign message: %v", err)
+		log.Fatalf("❌ Failed to create vote order: %v", err)
+	}
+	fmt.Printf("📝 Created vote order: %s\n", order.Data.Order.ID)
+	fmt.Printf("📝 Contract address: %s\n", order.Data.Payment.ContractAddress)
+	fmt.Printf("📝 Feed amount: %d\n", order.Data.Payment.Params.FeedAmount)
+
+	txHash := order.Data.Payment.Params.RequestID
+	if txHash == "" {
+		log.Fatalf("❌ No transaction hash found in order response")
+	}
+	fmt.Printf("📝 Transaction hash: %s\n", txHash)
+
+	if err := api.ConfirmVoteOrder(token, order.Data.Order.ID, txHash); err != nil {
+		log.Fatalf("❌ Failed to confirm vote order: %v", err)
 	}
 
-	token, err := api.SignIn(address, signature)
-	if err != nil {
-		log.Fatalf("Failed to sign in: %v", err)
-	}
-	fmt.Printf("Successfully authenticated\n")
-
-	orderID, err := api.CreateVoteOrder(token, cfg.TargetCountryID)
-	if err != nil {
-		log.Fatalf("Failed to create vote order: %v", err)
-	}
-	fmt.Printf("Created vote order: %s\n", orderID)
-
-	if err := api.ConfirmVoteOrder(token, orderID); err != nil {
-		log.Fatalf("Failed to confirm vote order: %v", err)
-	}
-
-	fmt.Println("Vote successfully submitted!")
+	fmt.Println("✅ Vote successfully submitted!")
+	os.Exit(0)
 }

@@ -2,53 +2,61 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"strconv"
+	"strings"
+
+	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
 )
 
 type Config struct {
-	PrivateKey      string
-	RPCURL          string
-	ChainID         int64
-	TargetCountry   string
-	TargetCountryID string
-	MaxAttempts     int
-	DelaySeconds    int
+	PrivateKey      string `envconfig:"PRIVATE_KEY" required:"true"`
+	RPCURL          string `envconfig:"RPC_URL" default:"https://testnet-rpc.monad.xyz"`
+	WalletID        string `envconfig:"WALLET_ID" required:"true"`
+	ChainID         string `envconfig:"CHAIN_ID" default:"10143"`
+	TargetCountry   string `envconfig:"TARGET_COUNTRY"`
+	TargetCountryID string `envconfig:"TARGET_COUNTRY_ID" required:"true"`
+	CandidateID     string `envconfig:"CANDIDATE_ID" required:"true"`
+	FeedAmount      int    `envconfig:"FEED_AMOUNT" default:"1"`
+	DelaySeconds    int    `envconfig:"DELAY_SECONDS" default:"5"`
 }
 
 func LoadConfig() (*Config, error) {
-	cfg := &Config{
-		RPCURL:          "https://testnet-rpc.monad.xyz",
-		ChainID:         10143,
-		PrivateKey:      getEnv("PRIVATE_KEY", ""),
-		TargetCountry:   getEnv("TARGET_COUNTRY", "ID"), 
-		TargetCountryID: getEnv("TARGET_COUNTRY_ID", ""),
-		MaxAttempts:     getEnvAsInt("MAX_ATTEMPTS", 3),
-		DelaySeconds:    getEnvAsInt("DELAY_SECONDS", 5),
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("Note: No .env file found, using environment variables")
 	}
+
+	var cfg Config
+	err := envconfig.Process("", &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process env vars: %v", err)
+	}
+
+	cfg.PrivateKey = strings.TrimSpace(cfg.PrivateKey)
+	cfg.WalletID = strings.TrimSpace(cfg.WalletID)
+	cfg.TargetCountryID = strings.TrimSpace(cfg.TargetCountryID)
+	cfg.CandidateID = strings.TrimSpace(cfg.CandidateID)
+	cfg.ChainID = strings.TrimSpace(cfg.ChainID)
 
 	if cfg.PrivateKey == "" {
 		return nil, fmt.Errorf("PRIVATE_KEY is required")
 	}
-
+	if cfg.WalletID == "" {
+		return nil, fmt.Errorf("WALLET_ID is required")
+	}
 	if cfg.TargetCountryID == "" {
 		return nil, fmt.Errorf("TARGET_COUNTRY_ID is required")
 	}
-
-	return cfg, nil
-}
-
-func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
+	if cfg.CandidateID == "" {
+		return nil, fmt.Errorf("CANDIDATE_ID is required")
 	}
-	return defaultValue
-}
 
-func getEnvAsInt(key string, defaultValue int) int {
-	strValue := getEnv(key, "")
-	if value, err := strconv.Atoi(strValue); err == nil {
-		return value
+	if cfg.RPCURL == "" {
+		cfg.RPCURL = "https://testnet-rpc.monad.xyz"
 	}
-	return defaultValue
+
+	if cfg.ChainID == "" {
+		cfg.ChainID = "10143"
+	}
+
+	return &cfg, nil
 }

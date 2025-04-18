@@ -8,66 +8,125 @@ import (
 	"net/http"
 )
 
-func CreateVoteOrder(token, countryID string) (string, error) {
+const (
+	baseURL1 = "https://api.aicraft.fun"
+)
+
+func CreateVoteOrder(token, candidateID, chainID, countryID, rpcURL, walletID string, feedAmount int) (*OrderResponse, error) {
 	url := fmt.Sprintf("%s/feeds/orders", baseURL)
-	
+
 	reqBody := map[string]interface{}{
-		"countryId": countryID,
+		"candidateID": candidateID,
+		"chainID":     chainID,
+		"countryId":   countryID,
+		"rpcUrl":      rpcURL,
+		"walletID":    walletID,
+		"feedAmount":  feedAmount,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %v", err)
+		return nil, fmt.Errorf("failed to marshal request body: %v", err)
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to create vote order: %v", err)
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("Create order response: %s\n", string(body))
+
 	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var voteOrder VoteOrder
-	if err := json.NewDecoder(resp.Body).Decode(&voteOrder); err != nil {
-		return "", fmt.Errorf("failed to decode response: %v", err)
+	var response OrderResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	return voteOrder.ID, nil
+	if response.Data.Order.ID == "" {
+		return nil, fmt.Errorf("empty order ID received")
+	}
+
+	return &response, nil
 }
 
-func ConfirmVoteOrder(token, orderID string) error {
+func GetVoteOrder(token, orderID string) (*OrderResponse, error) {
+	url := fmt.Sprintf("%s/feeds/orders/%s", baseURL, orderID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("Get order response: %s\n", string(body))
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var response OrderResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	return &response, nil
+}
+
+func ConfirmVoteOrder(token, orderID, txHash string) error {
 	url := fmt.Sprintf("%s/feeds/orders/%s/confirm", baseURL, orderID)
-	
-	req, err := http.NewRequest("POST", url, nil)
+
+	reqBody := map[string]interface{}{
+		"txHash": txHash,
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to confirm vote order: %v", err)
+		return fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("Confirm order response: %s\n", string(body))
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
